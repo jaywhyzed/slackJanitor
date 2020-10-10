@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/jaywhyzed/slackJanitor/client"
 	"fmt"
+	"github.com/jaywhyzed/slackJanitor/client"
 	"log"
 	"net/http"
 	"os"
@@ -198,7 +198,7 @@ func createChannelHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Got Users %+v", users)
 	fmt.Fprintf(w, "Got %d Users\n", len(users))
 
-	invitation := client.ConversationInvite{ Channel: channel.Id, }
+	invitation := client.ConversationInvite{Channel: channel.Id}
 
 	for _, user := range users {
 		invitation.Users = append(invitation.Users, user.Id)

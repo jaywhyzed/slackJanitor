@@ -33,8 +33,6 @@ func botUserToken() string {
 	if len(token) > 0 {
 		return token
 	}
-	// The Babus
-	return "***REMOVED***"
 }
 
 func newRequest(body Request) (*http.Request, error) {
