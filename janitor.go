@@ -185,7 +185,7 @@ func createChannelHandler(w http.ResponseWriter, r *http.Request) {
 	set_topic_resp := client.GenericResponse{}
 	client.ExecuteOrDie(client.ChannelSetTopic{
 		ChannelId: channel.Id,
-		Topic:     "Zoom: ***REMOVED***",
+		Topic:     "Zoom: " + os.Getenv("ZOOM_URL"),
 	},
 		set_topic_resp)
 
@@ -219,8 +219,7 @@ func createChannelHandler(w http.ResponseWriter, r *http.Request) {
 		client.PostMessageRequest{
 			ChannelId: channel.Id,
 			Text: "Hello, welcome to today's channel.\n" +
-				"As always, the Zoom link is " +
-				"***REMOVED***"},
+				"As always, the Zoom link is " + os.Getenv("ZOOM_URL")},
 		&post_resp)
 
 	old_channel := getChannelOrDie(oldChannel())
