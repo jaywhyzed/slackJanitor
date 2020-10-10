@@ -30,9 +30,10 @@ func ExecuteOrDie(req Request, resp interface{}) string {
 
 func botUserToken() string {
 	token := os.Getenv("SLACK_BOT_USER_TOKEN")
-	if len(token) > 0 {
-		return token
+	if len(token) == 0 {
+		log.Fatal("Missing SLACK_BOT_USER_TOKEN!")
 	}
+	return token
 }
 
 func newRequest(body Request) (*http.Request, error) {
@@ -72,7 +73,6 @@ func executeHttpReq(req *http.Request, resp interface{}) (string, error) {
 		log.Printf("Error while unmarshaling response, response was:\n%v\n\nError:\n%v", string(raw_resp), err)
 		return "", errors.New("Error unmarshaling response: " + err.Error())
 	}
-
 
 	return string(raw_resp), nil
 }
