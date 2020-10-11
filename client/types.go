@@ -30,6 +30,7 @@ type ChannelResponse struct {
 
 	Error       string `json:"error"`
 	ErrorDetail string `json:"detail"`
+	Warning string `json:"warning"`
 }
 
 type ChannelArchiveRequest struct {
@@ -47,9 +48,16 @@ type ChannelSetTopic struct {
 	Topic     string `json:"topic"`
 }
 
+type Block struct {
+	Type   string `json:"type"`
+	CallId string `json:"call_id"`
+}
+
+
 type PostMessageRequest struct {
 	ChannelId string `json:"channel"`
 	Text      string `json:"text"`
+	Blocks    []Block `json:"blocks"`
 }
 
 func (r PostMessageRequest) URL() string {
@@ -101,6 +109,37 @@ type ChannelListResponse struct {
 	Error    string           `json:"error"`
 }
 
+// We use Call for both the request creating the call, and also part of the
+// CallResponse.
+type Call struct {
+	// Return-only
+	Id string `json:"id"`
+
+	// Required for requests
+	ExternalUniqueId string `json:"external_unique_id"`
+	JoinUrl          string `json:"join_url"`
+
+	// Optional
+	StartTimeUnix     int64    `json:"date_start"`
+	DesktopAppJoinUrl string `json:"desktop_app_join_url"`
+	ExternalDisplayId string `json:"external_display_id"`
+	Title             string `json:"title"`
+}
+
+type CallResponse struct {
+	Ok      bool   `json:"ok"`
+	Call    Call   `json:"call"`
+	Warning string `json:"warning"`
+	Error   string `json:"error"`
+}
+
+func (r Call) Verb() string {
+	return "POST"
+}
+func (r Call) URL() string {
+	return "https://slack.com/api/calls.add"
+}
+
 func (r ChannelListRequest) Verb() string {
 	return "GET"
 }
@@ -126,9 +165,9 @@ func (r UsersListRequest) Verb() string {
 }
 
 type UsersListRequest struct {
-	// jz -- these don't encode to json
-	Cursor string //  `json:"cursor"`
-	Limit  string // `json:"limit"`
+	// These don't encode to JSON, since this isn't a POST request.
+	Cursor string
+	Limit  string
 }
 
 type User struct {
