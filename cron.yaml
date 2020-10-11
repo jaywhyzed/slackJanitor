@@ -7,3 +7,11 @@ cron:
     min_backoff_seconds: 5
     max_doublings: 5
     job_retry_limit: 5
+- description: "Tuesday evening zoom call post"
+  url: /post_call
+  schedule: every tuesday 18:30
+  timezone: America/Los_Angeles
+  retry_parameters:
+    min_backoff_seconds: 5
+    max_doublings: 5
+    job_retry_limit: 5
