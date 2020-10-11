@@ -13,6 +13,7 @@ func main() {
 
 	http.HandleFunc("/", indexHandler)
 	http.HandleFunc("/create_channel", createChannelHandler)
+	http.HandleFunc("/post_call", postCallHandler)
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -26,19 +27,15 @@ func main() {
 	}
 }
 
-var _CALIFORNIA_LOCATION *time.Location
+// A time.Location representing California.
+var CaliforniaLocation *time.Location
 
-// CaliforniaLocation returns a time.Location representing California.
-func CaliforniaLocation() *time.Location {
-	if _CALIFORNIA_LOCATION != nil {
-		return _CALIFORNIA_LOCATION
-	}
+func init() {
 	var err error
-	_CALIFORNIA_LOCATION, err = time.LoadLocation("America/Los_Angeles")
+	CaliforniaLocation, err = time.LoadLocation("America/Los_Angeles")
 	if err != nil {
 		log.Fatalf("Got error loading location: %+v\n", err)
 	}
-	return _CALIFORNIA_LOCATION
 }
 
 // timeAsChannelName converts a time.Time to the name of a channel.
@@ -47,13 +44,13 @@ func timeAsChannelName(t time.Time) string {
 }
 
 // The name of the new channel, to be created.
-func newChannel() string {
-	return timeAsChannelName(time.Now().In(CaliforniaLocation()))
+func newChannelName() string {
+	return timeAsChannelName(time.Now().In(CaliforniaLocation))
 }
 
 // The name of the old channel, to be archived.
-func oldChannel() string {
-	return timeAsChannelName(time.Now().AddDate(0, 0, -7).In(CaliforniaLocation()))
+func oldChannelName() string {
+	return timeAsChannelName(time.Now().AddDate(0, 0, -7).In(CaliforniaLocation))
 }
 
 // indexHandler responds to requests with our greeting.
@@ -92,10 +89,7 @@ func getNonBotUsersOrDie() []client.User {
 			log.Fatalf("Error getting non-bot users:\n%s", json_str)
 		}
 
-		// log.Printf("Got raw response:\n%v\n", *json_str)
-
 		for _, user := range users_resp.Members {
-			log.Printf("Got member: %+v\n", user)
 			if user.IsBot == false && user.Deleted == false {
 				users = append(users, user)
 			}
@@ -136,7 +130,7 @@ func getChannelOrDie(name string) *client.Channel {
 // Add all non bot users to the new channel.
 // Archive the old channel.
 func createChannelHandler(w http.ResponseWriter, r *http.Request) {
-	is_cron := r.Header.Get("X-Appengine-Cron") //  , false)
+	is_cron := r.Header.Get("X-Appengine-Cron")
 	log.Printf("Called from Appengine-Cron: %v\n", is_cron)
 
 	if is_cron != "true" {
@@ -153,9 +147,8 @@ func createChannelHandler(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Fprint(w, "Hello, World!\n")
 
-	channel_resp := createChannelOrDie(newChannel())
+	channel_resp := createChannelOrDie(newChannelName())
 	fmt.Fprintf(w, "Got ChannelCreate Response:%+v\n", channel_resp)
-	log.Printf("Got ChannelCreate Response:%+v\n", channel_resp)
 
 	channel := &channel_resp.Channel
 
@@ -165,19 +158,15 @@ func createChannelHandler(w http.ResponseWriter, r *http.Request) {
 		if channel_resp.Error == "name_taken" {
 			fmt.Fprintf(w, "Channel already exists, fetching it...\n")
 			log.Printf("Fetching existing channel...")
-			channel = getChannelOrDie(newChannel())
+			channel = getChannelOrDie(newChannelName())
 			if channel != nil {
 				fmt.Fprintf(w, "Fetched channel:\n%+v\n", *channel)
 			} else {
-				log.Fatal("Couldn't find channel!")
+				log.Printf("Can't find the channel #%s!", newChannelName())
+				http.NotFound(w, r)
+				return
 			}
 		}
-	}
-
-	if channel == nil {
-		log.Printf("Can't find the channel #%s!", newChannel())
-		http.NotFound(w, r)
-		return
 	}
 
 	log.Printf("Setting topic...")
@@ -189,14 +178,10 @@ func createChannelHandler(w http.ResponseWriter, r *http.Request) {
 	},
 		set_topic_resp)
 
-	fmt.Fprintf(w, "set topic response:\n%+v\n", set_topic_resp)
-	log.Printf("set topic response:\n%+v", set_topic_resp)
-
 	log.Printf("Getting Users")
 	users := getNonBotUsersOrDie()
 
-	log.Printf("Got Users %+v", users)
-	fmt.Fprintf(w, "Got %d Users\n", len(users))
+	log.Printf("Got %d Users", len(users))
 
 	invitation := client.ConversationInvite{Channel: channel.Id}
 
@@ -205,13 +190,11 @@ func createChannelHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	invite_response := client.ChannelResponse{}
-	log.Printf("Sending invitation...")
 	fmt.Fprintf(w, "Sending invitation to new channel...\n")
 	json_resp := client.ExecuteOrDie(invitation, &invite_response)
-	if invite_response.Ok == false {
+	if !invite_response.Ok {
 		// Invitation will fail if users are already added, not idempotent. Just ignore.
 		log.Printf("Invitation failed! Ignoring.\n%+v\n%s", invite_response, json_resp)
-		fmt.Fprintf(w, "Invitation failed! Ignoring.\n\n%s", json_resp)
 	}
 
 	post_resp := client.GenericResponse{}
@@ -222,22 +205,72 @@ func createChannelHandler(w http.ResponseWriter, r *http.Request) {
 				"As always, the Zoom link is " + os.Getenv("ZOOM_URL")},
 		&post_resp)
 
-	old_channel := getChannelOrDie(oldChannel())
+	old_channel := getChannelOrDie(oldChannelName())
 	if old_channel == nil {
-		log.Printf("Couldn't find old channel #%s, ignoring", oldChannel())
-		fmt.Fprintf(w, "Couldn't find old channel #%s\n", oldChannel())
+		fmt.Fprintf(w, "Couldn't find old channel #%s\n", oldChannelName())
 	} else {
 		fmt.Fprintf(w, "Attempting to archive old channel.\n")
-		log.Printf("Attempting to archive old channel.")
 		archive_resp := client.GenericResponse{}
 		client.ExecuteOrDie(client.ChannelArchiveRequest{ChannelId: old_channel.Id}, &archive_resp)
 
-		if archive_resp.Ok == false {
-			fmt.Fprintf(w, "Archive failed, ignoring:\n%+v", archive_resp)
+		if !archive_resp.Ok {
 			log.Printf("Archive failed, ignoring:\n%+v", archive_resp)
 		} else {
-			fmt.Fprintf(w, "Archive done.\n")
 			log.Printf("Archive done.")
 		}
+	}
+}
+
+func todayAtSixThirty() time.Time {
+	year, month, day := time.Now().In(CaliforniaLocation).Date()
+	return time.Date(year, month, day, 18, 30, 0, 0, CaliforniaLocation)
+}
+
+// postCallHandler handles the /post_call URL.
+// Create a Call object for the Zoom call.
+// Get the new Channel.
+// Post the Call to the Channel.
+func postCallHandler(w http.ResponseWriter, r *http.Request) {
+	is_cron := r.Header.Get("X-Appengine-Cron")
+	log.Printf("Called from Appengine-Cron: %v\n", is_cron)
+
+	if is_cron != "true" {
+		fmt.Fprintf(w, "This handler only accepts requests from Appengine Cron.\n")
+		log.Printf("Called from non-cron: %+v", *r)
+		log.Printf("Headers: %+v", r.Header)
+		return
+	}
+
+	if r.URL.Path != "/post_call" {
+		http.NotFound(w, r)
+		return
+	}
+
+	call := client.Call{
+		ExternalUniqueId:  newChannelName(),
+		JoinUrl:           os.Getenv("ZOOM_URL"),
+		ExternalDisplayId: os.Getenv("ZOOM_CALL_ID"),
+		Title:             "Game Time!",
+		StartTimeUnix:     todayAtSixThirty().Unix(),
+	}
+
+	var callResp client.CallResponse
+	client.ExecuteOrDie(call, &callResp)
+	if !callResp.Ok {
+		log.Fatalf("Error in call:\n%+v\n\nRequest was:\n%+v", callResp, call)
+	}
+
+	var postResp client.GenericResponse
+	client.ExecuteOrDie(
+		client.PostMessageRequest{
+			ChannelId: getChannelOrDie(newChannelName()).Id,
+			Text:      "Join the Zoom",
+			Blocks: []client.Block{
+				client.Block{Type: "call", CallId: callResp.Call.Id},
+			},
+		},
+		&postResp)
+	if !postResp.Ok {
+		log.Fatalf("Error posting message:\n%+v", postResp)
 	}
 }
