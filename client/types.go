@@ -30,7 +30,7 @@ type ChannelResponse struct {
 
 	Error       string `json:"error"`
 	ErrorDetail string `json:"detail"`
-	Warning string `json:"warning"`
+	Warning     string `json:"warning"`
 }
 
 type ChannelArchiveRequest struct {
@@ -53,10 +53,9 @@ type Block struct {
 	CallId string `json:"call_id"`
 }
 
-
 type PostMessageRequest struct {
-	ChannelId string `json:"channel"`
-	Text      string `json:"text"`
+	ChannelId string  `json:"channel"`
+	Text      string  `json:"text"`
 	Blocks    []Block `json:"blocks"`
 }
 
@@ -120,7 +119,7 @@ type Call struct {
 	JoinUrl          string `json:"join_url"`
 
 	// Optional
-	StartTimeUnix     int64    `json:"date_start"`
+	StartTimeUnix     int64  `json:"date_start"`
 	DesktopAppJoinUrl string `json:"desktop_app_join_url"`
 	ExternalDisplayId string `json:"external_display_id"`
 	Title             string `json:"title"`
@@ -131,6 +130,17 @@ type CallResponse struct {
 	Call    Call   `json:"call"`
 	Warning string `json:"warning"`
 	Error   string `json:"error"`
+}
+
+type CallEnd struct {
+	Id string `json:"id"`
+}
+
+func (r CallEnd) Verb() string {
+	return "POST"
+}
+func (r CallEnd) URL() string {
+	return "https://slack.com/api/calls.end"
 }
 
 func (r Call) Verb() string {

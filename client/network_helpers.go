@@ -16,7 +16,15 @@ func Execute(req Request, resp interface{}) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return executeHttpReq(http_req, resp)
+	log.Printf("Calling URL %s", req.URL())
+	json, err := executeHttpReq(http_req, resp)
+	if err != nil {
+		log.Printf("Got error making HTTP request: %v", err)
+	} else {
+		log.Printf("Got response:\n%+v", resp)
+	}
+
+	return json, err
 }
 
 func ExecuteOrDie(req Request, resp interface{}) string {
@@ -58,19 +66,16 @@ func executeHttpReq(req *http.Request, resp interface{}) (string, error) {
 	http_resp, err := client.Do(req)
 
 	if err != nil {
-		log.Printf("Error while executing request:\n%+v\n\nError is:\n%v\n", *req, err)
 		return "", errors.New("Error executing request: " + err.Error())
 	}
 	defer http_resp.Body.Close()
 
 	raw_resp, err := ioutil.ReadAll(http_resp.Body)
 	if err != nil {
-		log.Printf("Error while reading response:\n%v", err)
 		return "", errors.New("Error reading response: " + err.Error())
 	}
 	err = json.Unmarshal(raw_resp, &resp)
 	if err != nil {
-		log.Printf("Error while unmarshaling response, response was:\n%v\n\nError:\n%v", string(raw_resp), err)
 		return "", errors.New("Error unmarshaling response: " + err.Error())
 	}
 
