@@ -17,6 +17,7 @@ slackJanitor
 
 # temp files
 *~
+.#*.go
 
 # My environment currently has an oauth token, don't put that in git.
 app.yaml
