@@ -1,3 +1,5 @@
+// Request and Response objects.
+
 package client
 
 import (
@@ -5,18 +7,15 @@ import (
 	"net/url"
 )
 
-type Request interface {
-	URL() string
-	Verb() string
-}
-
+// conversations.create request. Uses ChannelResponse.
 type CreateChannelRequest struct {
 	Name string `json:"name"`
 }
 
+// conversations.invite request. Uses ChannelResponse.
 type ConversationInvite struct {
-	Channel string   `json:"channel"`
-	Users   []string `json:"users"`
+	ChannelId string   `json:"channel"`
+	Users     []string `json:"users"`
 }
 
 type Channel struct {
@@ -33,17 +32,21 @@ type ChannelResponse struct {
 	Warning     string `json:"warning"`
 }
 
+// conversations.archive request. Uses GenericResponse.
 type ChannelArchiveRequest struct {
 	ChannelId string `json:"channel"`
 }
 
+// GenericResponse represents a generic response for
+// methods that don't return more specific information.
 type GenericResponse struct {
 	Ok      bool   `json:"ok"`
 	Warning string `json:"warning"`
 	Error   string `json:"error"`
 }
 
-type ChannelSetTopic struct {
+// conversations.setTopic request. Uses GenericResponse.
+type ChannelSetTopicRequest struct {
 	ChannelId string `json:"channel"`
 	Topic     string `json:"topic"`
 }
@@ -53,10 +56,80 @@ type Block struct {
 	CallId string `json:"call_id"`
 }
 
+// chat.postMessage request. Uses GenericResponse.
 type PostMessageRequest struct {
 	ChannelId string  `json:"channel"`
 	Text      string  `json:"text"`
 	Blocks    []Block `json:"blocks"`
+}
+
+// conversations.List request. Uses ChannelListResponse.
+type ChannelListRequest struct {
+	Cursor string
+}
+
+type ChannelListResponse struct {
+	Ok       bool             `json:"ok"`
+	Channels []Channel        `json:"channels"`
+	Metadata ResponseMetadata `json:"response_metadata"`
+	Warning  string           `json:"warning"`
+	Error    string           `json:"error"`
+}
+
+// Call is used for calls.add requests, and also part of the CallResponse.
+type Call struct {
+	// Return-only
+	Id string `json:"id"`
+
+	// Required for requests
+	ExternalUniqueId string `json:"external_unique_id"`
+	JoinUrl          string `json:"join_url"`
+
+	// Optional
+	StartTimeUnix     int64  `json:"date_start"`
+	DesktopAppJoinUrl string `json:"desktop_app_join_url"`
+	ExternalDisplayId string `json:"external_display_id"`
+	Title             string `json:"title"`
+}
+
+type CallResponse struct {
+	Ok      bool   `json:"ok"`
+	Call    Call   `json:"call"`
+	Warning string `json:"warning"`
+	Error   string `json:"error"`
+}
+
+// calls.end Request. Uses GenericResponse.
+type CallEnd struct {
+	Id string `json:"id"`
+}
+
+// users.list request. Uses UsersListResponse.
+type UsersListRequest struct {
+	// These don't encode to JSON, since this isn't a POST request.
+	Cursor string
+	Limit  string
+}
+
+type User struct {
+	Id      string `json:"id"`
+	Name    string `json:"name"`
+	Deleted bool   `json:"deleted"`
+	IsBot   bool   `json:"is_bot"`
+}
+
+type ResponseMetadata struct {
+	// NextCursor is used by paginating methods.
+	NextCursor string `json:"next_cursor"`
+}
+
+type UsersListResponse struct {
+	Ok       bool             `json:"ok"`
+	Members  []User           `json:"members"`
+	Metadata ResponseMetadata `json:"response_metadata"`
+
+	Error       string `json:"error"`
+	ErrorDetail string `json:"detail"`
 }
 
 func (r PostMessageRequest) URL() string {
@@ -67,11 +140,11 @@ func (r PostMessageRequest) Verb() string {
 	return "POST"
 }
 
-func (r ChannelSetTopic) URL() string {
+func (r ChannelSetTopicRequest) URL() string {
 	return "https://slack.com/api/conversations.setTopic"
 }
 
-func (r ChannelSetTopic) Verb() string {
+func (r ChannelSetTopicRequest) Verb() string {
 	return "POST"
 }
 
@@ -95,45 +168,6 @@ func (r ConversationInvite) URL() string {
 }
 func (r ConversationInvite) Verb() string {
 	return "POST"
-}
-
-type ChannelListRequest struct {
-	Cursor string
-}
-
-type ChannelListResponse struct {
-	Ok       bool             `json:"ok"`
-	Channels []Channel        `json:"channels"`
-	Metadata ResponseMetadata `json:"response_metadata"`
-	Error    string           `json:"error"`
-}
-
-// We use Call for both the request creating the call, and also part of the
-// CallResponse.
-type Call struct {
-	// Return-only
-	Id string `json:"id"`
-
-	// Required for requests
-	ExternalUniqueId string `json:"external_unique_id"`
-	JoinUrl          string `json:"join_url"`
-
-	// Optional
-	StartTimeUnix     int64  `json:"date_start"`
-	DesktopAppJoinUrl string `json:"desktop_app_join_url"`
-	ExternalDisplayId string `json:"external_display_id"`
-	Title             string `json:"title"`
-}
-
-type CallResponse struct {
-	Ok      bool   `json:"ok"`
-	Call    Call   `json:"call"`
-	Warning string `json:"warning"`
-	Error   string `json:"error"`
-}
-
-type CallEnd struct {
-	Id string `json:"id"`
 }
 
 func (r CallEnd) Verb() string {
@@ -172,32 +206,6 @@ func (r ChannelListRequest) URL() string {
 
 func (r UsersListRequest) Verb() string {
 	return "GET"
-}
-
-type UsersListRequest struct {
-	// These don't encode to JSON, since this isn't a POST request.
-	Cursor string
-	Limit  string
-}
-
-type User struct {
-	Id      string `json:"id"`
-	Name    string `json:"name"`
-	Deleted bool   `json:"deleted"`
-	IsBot   bool   `json:"is_bot"`
-}
-
-type ResponseMetadata struct {
-	NextCursor string `json:"next_cursor"`
-}
-
-type UsersListResponse struct {
-	Ok       bool             `json:"ok"`
-	Members  []User           `json:"members"`
-	Metadata ResponseMetadata `json:"response_metadata"`
-
-	Error       string `json:"error"`
-	ErrorDetail string `json:"detail"`
 }
 
 func (r UsersListRequest) URL() string {

@@ -4,20 +4,60 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
-	"os"
+	"reflect"
 )
 
+type Request interface {
+	URL() string
+	Verb() string
+}
+
+//go:generate mockgen --destination=mocks/mock_client.go --package mocks . Client
+type Client interface {
+	// Execute makes an HTTP request with the given Request,
+	// and populates resp with the JSON response.
+	// Returns the raw response text, and an error (nil on success).
+	Execute(req Request, resp interface{}) (string, error)
+}
+
+// HTTPClient interface, this is implemented by http.Client
+//go:generate mockgen --destination=mocks/mock_http_client.go --package mocks . HttpClientInterface
+type HttpClientInterface interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
+type ClientImpl struct {
+	httpClient HttpClientInterface
+	token      string
+}
+
+func NewClientWithHttpClient(httpClient HttpClientInterface, token string) Client {
+	return &ClientImpl{
+		httpClient: httpClient,
+		token:      token,
+	}
+}
+
+func NewClient(token string) Client {
+	return NewClientWithHttpClient(&http.Client{}, token)
+}
+
 // Populates resp, returns the raw json string and an error.
-func Execute(req Request, resp interface{}) (string, error) {
-	http_req, err := newRequest(req)
+func (c ClientImpl) Execute(req Request, resp interface{}) (string, error) {
+	// Reset the resp pointer in case it's not empty.
+	p := reflect.ValueOf(resp).Elem()
+	p.Set(reflect.Zero(p.Type()))
+
+	http_req, err := newRequest(req, c.token)
 	if err != nil {
 		return "", err
 	}
 	log.Printf("Calling URL %s", req.URL())
-	json, err := executeHttpReq(http_req, resp)
+	json, err := executeHttpReq(c.httpClient, http_req, resp)
 	if err != nil {
 		log.Printf("Got error making HTTP request: %v", err)
 	} else {
@@ -27,24 +67,7 @@ func Execute(req Request, resp interface{}) (string, error) {
 	return json, err
 }
 
-func ExecuteOrDie(req Request, resp interface{}) string {
-	raw_string, err := Execute(req, &resp)
-	if err != nil {
-		log.Fatalf("Fatal error executing request! %v\n\nRequest:\n%+v",
-			err, req)
-	}
-	return raw_string
-}
-
-func botUserToken() string {
-	token := os.Getenv("SLACK_BOT_USER_TOKEN")
-	if len(token) == 0 {
-		log.Fatal("Missing SLACK_BOT_USER_TOKEN!")
-	}
-	return token
-}
-
-func newRequest(body Request) (*http.Request, error) {
+func newRequest(body Request, bearerToken string) (*http.Request, error) {
 	buf := new(bytes.Buffer)
 	if body.Verb() == "POST" {
 		log.Printf("Creating POST request with body:\n%v", body)
@@ -55,20 +78,23 @@ func newRequest(body Request) (*http.Request, error) {
 	if err != nil {
 		return nil, errors.New("Error creating http.Request: " + err.Error())
 	}
-	req.Header.Add("Authorization", "Bearer "+botUserToken())
+	req.Header.Add("Authorization", "Bearer "+bearerToken)
 	req.Header.Set("Content-Type", "application/json; charset=utf-8")
 
 	return req, nil
 }
 
-func executeHttpReq(req *http.Request, resp interface{}) (string, error) {
-	client := http.Client{}
-	http_resp, err := client.Do(req)
+func executeHttpReq(httpClient HttpClientInterface, req *http.Request, resp interface{}) (string, error) {
+	http_resp, err := httpClient.Do(req)
 
 	if err != nil {
 		return "", errors.New("Error executing request: " + err.Error())
 	}
 	defer http_resp.Body.Close()
+
+	if http_resp.StatusCode != 200 {
+		return "", errors.New(fmt.Sprintf("Got non-200 response:\n %+v", http_resp))
+	}
 
 	raw_resp, err := ioutil.ReadAll(http_resp.Body)
 	if err != nil {
@@ -76,7 +102,8 @@ func executeHttpReq(req *http.Request, resp interface{}) (string, error) {
 	}
 	err = json.Unmarshal(raw_resp, &resp)
 	if err != nil {
-		return "", errors.New("Error unmarshaling response: " + err.Error())
+		return string(raw_resp), errors.New(
+			fmt.Sprintf("Error unmarshaling response: %s", err.Error()))
 	}
 
 	return string(raw_resp), nil
