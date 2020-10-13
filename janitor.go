@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"reflect"
 	"time"
 )
 
@@ -29,6 +30,33 @@ func main() {
 
 // A time.Location representing California.
 var CaliforniaLocation *time.Location
+var slackClient client.Client
+
+// Initialize the client if necessary, and all Execute.
+func Execute(req client.Request, resp interface{}) (string, error) {
+	// Clear the response.
+	p := reflect.ValueOf(resp).Elem()
+	p.Set(reflect.Zero(p.Type()))
+
+	if slackClient == nil {
+		token := os.Getenv("SLACK_BOT_USER_TOKEN")
+		if len(token) == 0 {
+			log.Fatal("Missing token!")
+		}
+		slackClient = client.NewClient(token)
+	}
+	return slackClient.Execute(req, resp)
+}
+
+// Like Execute() but dies on underlying failure.
+func ExecuteOrDie(req client.Request, resp interface{}) string {
+	respText, err := Execute(req, resp)
+	if err != nil {
+		log.Fatalf("Encountered error: %s\nHandling request:\n%+v\nResponse text:\n%s",
+			err, req, respText)
+	}
+	return respText
+}
 
 func init() {
 	var err error
@@ -67,7 +95,7 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 // Dies on HTTP error.
 func createChannelOrDie(name string) client.ChannelResponse {
 	var channel_resp client.ChannelResponse
-	json_str := client.ExecuteOrDie(client.CreateChannelRequest{Name: name}, &channel_resp)
+	json_str := ExecuteOrDie(client.CreateChannelRequest{Name: name}, &channel_resp)
 	if channel_resp.Ok == false {
 		log.Printf("Error creating channel? Response:\n%s\n", json_str)
 	}
@@ -79,12 +107,11 @@ func createChannelOrDie(name string) client.ChannelResponse {
 // Dies on HTTP error.
 func getNonBotUsersOrDie() []client.User {
 	users_req := client.UsersListRequest{}
-	users_resp := client.UsersListResponse{}
-
 	users := make([]client.User, 0)
 
 	for ok := true; ok == true; ok = len(users_req.Cursor) > 0 {
-		json_str := client.ExecuteOrDie(users_req, &users_resp)
+		var users_resp client.UsersListResponse
+		json_str := ExecuteOrDie(users_req, &users_resp)
 		if users_resp.Ok == false {
 			log.Fatalf("Error getting non-bot users:\n%s", json_str)
 		}
@@ -108,7 +135,7 @@ func getChannelOrDie(name string) *client.Channel {
 
 	for ok := true; ok == true; ok = len(channels_req.Cursor) > 0 {
 		log.Printf("Executing ChannelListRequest...")
-		client.ExecuteOrDie(channels_req, &channels_resp)
+		ExecuteOrDie(channels_req, &channels_resp)
 		if channels_resp.Ok != true {
 			log.Fatalf("Channels resp error:\n%+v", channels_resp)
 		}
@@ -134,9 +161,9 @@ func createChannelHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Called from Appengine-Cron: %v\n", is_cron)
 
 	if is_cron != "true" {
-		fmt.Fprintf(w, "This handler only accepts requests from Appengine Cron.\n")
 		log.Printf("Called from non-cron: %+v", *r)
 		log.Printf("Headers: %+v", r.Header)
+		http.Error(w, "Only accepts calls from AppEngine Cron.\n", 400)
 		return
 	}
 
@@ -172,18 +199,21 @@ func createChannelHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Setting topic...")
 	fmt.Fprintf(w, "Setting topic...\n")
 	set_topic_resp := client.GenericResponse{}
-	client.ExecuteOrDie(client.ChannelSetTopic{
+	ExecuteOrDie(client.ChannelSetTopicRequest{
 		ChannelId: channel.Id,
 		Topic:     "Zoom: " + os.Getenv("ZOOM_URL"),
 	},
-		set_topic_resp)
+		&set_topic_resp)
+	if !set_topic_resp.Ok {
+		log.Printf("Failed to set topic.")
+	}
 
 	log.Printf("Getting Users")
 	users := getNonBotUsersOrDie()
 
 	log.Printf("Got %d Users", len(users))
 
-	invitation := client.ConversationInvite{Channel: channel.Id}
+	invitation := client.ConversationInvite{ChannelId: channel.Id}
 
 	for _, user := range users {
 		invitation.Users = append(invitation.Users, user.Id)
@@ -191,14 +221,14 @@ func createChannelHandler(w http.ResponseWriter, r *http.Request) {
 
 	invite_response := client.ChannelResponse{}
 	fmt.Fprintf(w, "Sending invitation to new channel...\n")
-	json_resp := client.ExecuteOrDie(invitation, &invite_response)
+	json_resp := ExecuteOrDie(invitation, &invite_response)
 	if !invite_response.Ok {
 		// Invitation will fail if users are already added, not idempotent. Just ignore.
 		log.Printf("Invitation failed! Ignoring.\n%+v\n%s", invite_response, json_resp)
 	}
 
 	post_resp := client.GenericResponse{}
-	client.ExecuteOrDie(
+	ExecuteOrDie(
 		client.PostMessageRequest{
 			ChannelId: channel.Id,
 			Text: "Hello, welcome to today's channel.\n" +
@@ -211,7 +241,7 @@ func createChannelHandler(w http.ResponseWriter, r *http.Request) {
 	} else {
 		fmt.Fprintf(w, "Attempting to archive old channel.\n")
 		archive_resp := client.GenericResponse{}
-		client.ExecuteOrDie(client.ChannelArchiveRequest{ChannelId: old_channel.Id}, &archive_resp)
+		ExecuteOrDie(client.ChannelArchiveRequest{ChannelId: old_channel.Id}, &archive_resp)
 
 		if !archive_resp.Ok {
 			log.Printf("Archive failed, ignoring:\n%+v", archive_resp)
@@ -235,9 +265,9 @@ func postCallHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Called from Appengine-Cron: %v\n", is_cron)
 
 	if is_cron != "true" {
-		fmt.Fprintf(w, "This handler only accepts requests from Appengine Cron.\n")
 		log.Printf("Called from non-cron: %+v", *r)
 		log.Printf("Headers: %+v", r.Header)
+		http.Error(w, "Only accepts calls from AppEngine Cron.\n", 400)
 		return
 	}
 
@@ -255,13 +285,13 @@ func postCallHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var callResp client.CallResponse
-	client.ExecuteOrDie(call, &callResp)
+	ExecuteOrDie(call, &callResp)
 	if !callResp.Ok {
 		log.Fatalf("Error in call:\n%+v\n\nRequest was:\n%+v", callResp, call)
 	}
 
 	var postResp client.GenericResponse
-	client.ExecuteOrDie(
+	ExecuteOrDie(
 		client.PostMessageRequest{
 			ChannelId: getChannelOrDie(newChannelName()).Id,
 			Text:      "Join the Zoom",
