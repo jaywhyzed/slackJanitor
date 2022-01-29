@@ -127,7 +127,7 @@ func TestCreateChannel(t *testing.T) {
 		// Set the Channel's Topic.
 		mockClient.EXPECT().Execute(
 			/*req=*/ client.ChannelSetTopicRequest{
-				ChannelId: "newchannelid", Topic: "Zoom: http://zoom"},
+				ChannelId: "newchannelid", Topic: "Video Call: http://zoom"},
 			/*resp=*/ gomock.AssignableToTypeOf(&client.GenericResponse{})).DoAndReturn(
 			func(req client.ChannelSetTopicRequest,
 				resp *client.GenericResponse) (string, error) {
@@ -178,7 +178,7 @@ func TestCreateChannel(t *testing.T) {
 		mockClient.EXPECT().Execute(
 			/*req=*/ client.PostMessageRequest{
 				ChannelId: "newchannelid",
-				Text:      "Hello, welcome to today's channel.\nAs always, the Zoom link is http://zoom"},
+				Text:      "Hello, welcome to today's channel.\nOur new video call link is http://zoom"},
 			/*resp=*/ gomock.AssignableToTypeOf(&client.GenericResponse{})).DoAndReturn(
 			func(req client.PostMessageRequest, resp *client.GenericResponse) (string, error) {
 				resp.Ok = true
@@ -286,7 +286,7 @@ func TestPostCall(t *testing.T) {
 		mockClient.EXPECT().Execute(
 			/*req=*/ client.PostMessageRequest{
 				ChannelId: "channelid",
-				Text:      "Join the Zoom",
+				Text:      "Join the Video Call",
 				Blocks:    []client.Block{client.Block{Type: "call", CallId: "987654"}},
 			},
 			/*resp=*/ gomock.AssignableToTypeOf(&client.GenericResponse{})).DoAndReturn(
@@ -319,7 +319,7 @@ func TestPostCall(t *testing.T) {
 
 func TestMain(m *testing.M) {
 	// call flag.Parse() here if TestMain uses flags
-	os.Setenv("ZOOM_URL", "http://zoom")
-	os.Setenv("ZOOM_CALL_ID", "123456")
+	os.Setenv("VC_URL", "http://zoom")
+	os.Setenv("VC_CALL_ID", "123456")
 	os.Exit(m.Run())
 }

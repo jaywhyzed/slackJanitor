@@ -2,12 +2,13 @@ package main
 
 import (
 	"fmt"
-	"github.com/jaywhyzed/slackJanitor/client"
 	"log"
 	"net/http"
 	"os"
 	"reflect"
 	"time"
+
+	"github.com/jaywhyzed/slackJanitor/client"
 )
 
 func main() {
@@ -201,7 +202,7 @@ func createChannelHandler(w http.ResponseWriter, r *http.Request) {
 	set_topic_resp := client.GenericResponse{}
 	ExecuteOrDie(client.ChannelSetTopicRequest{
 		ChannelId: channel.Id,
-		Topic:     "Zoom: " + os.Getenv("ZOOM_URL"),
+		Topic:     "Video Call: " + os.Getenv("VC_URL"),
 	},
 		&set_topic_resp)
 	if !set_topic_resp.Ok {
@@ -231,8 +232,7 @@ func createChannelHandler(w http.ResponseWriter, r *http.Request) {
 	ExecuteOrDie(
 		client.PostMessageRequest{
 			ChannelId: channel.Id,
-			Text: "Hello, welcome to today's channel.\n" +
-				"As always, the Zoom link is " + os.Getenv("ZOOM_URL")},
+			Text:      fmt.Sprintf("Hello, welcome to today's channel.\nOur new video call link is %s", os.Getenv("VC_URL"))},
 		&post_resp)
 
 	old_channel := getChannelOrDie(oldChannelName())
@@ -257,7 +257,7 @@ func todayAtSixThirty() time.Time {
 }
 
 // postCallHandler handles the /post_call URL.
-// Create a Call object for the Zoom call.
+// Create a Call object for the video call.
 // Get the new Channel.
 // Post the Call to the Channel.
 func postCallHandler(w http.ResponseWriter, r *http.Request) {
@@ -278,8 +278,8 @@ func postCallHandler(w http.ResponseWriter, r *http.Request) {
 
 	call := client.Call{
 		ExternalUniqueId:  newChannelName(),
-		JoinUrl:           os.Getenv("ZOOM_URL"),
-		ExternalDisplayId: os.Getenv("ZOOM_CALL_ID"),
+		JoinUrl:           os.Getenv("VC_URL"),
+		ExternalDisplayId: os.Getenv("VC_CALL_ID"),
 		Title:             "Game Time!",
 		StartTimeUnix:     todayAtSixThirty().Unix(),
 	}
@@ -294,7 +294,7 @@ func postCallHandler(w http.ResponseWriter, r *http.Request) {
 	ExecuteOrDie(
 		client.PostMessageRequest{
 			ChannelId: getChannelOrDie(newChannelName()).Id,
-			Text:      "Join the Zoom",
+			Text:      "Join the Video Call",
 			Blocks: []client.Block{
 				client.Block{Type: "call", CallId: callResp.Call.Id},
 			},
