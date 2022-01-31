@@ -1,4 +1,4 @@
-package main
+package janitor
 
 import (
 	"github.com/golang/mock/gomock"
@@ -17,7 +17,7 @@ func TestIndexHandler(t *testing.T) {
 	}
 
 	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(indexHandler)
+	handler := http.HandlerFunc(IndexHandler)
 	handler.ServeHTTP(rr, req)
 
 	if status := rr.Code; status != http.StatusOK {
@@ -38,7 +38,7 @@ func TestIndexHandlerNotFound(t *testing.T) {
 	}
 
 	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(indexHandler)
+	handler := http.HandlerFunc(IndexHandler)
 	handler.ServeHTTP(rr, req)
 
 	if status := rr.Code; status != http.StatusNotFound {
@@ -69,7 +69,7 @@ func TestCreateChannelWithoutCronHeader(t *testing.T) {
 	}
 
 	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(createChannelHandler)
+	handler := http.HandlerFunc(CreateChannelHandler)
 	handler.ServeHTTP(rr, req)
 
 	if status := rr.Code; status != http.StatusBadRequest {
@@ -93,7 +93,7 @@ func TestPostCallWithoutCronHeader(t *testing.T) {
 	}
 
 	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(postCallHandler)
+	handler := http.HandlerFunc(PostCallHandler)
 	handler.ServeHTTP(rr, req)
 
 	if status := rr.Code; status != http.StatusBadRequest {
@@ -230,7 +230,7 @@ func TestCreateChannel(t *testing.T) {
 	}
 
 	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(createChannelHandler)
+	handler := http.HandlerFunc(CreateChannelHandler)
 	handler.ServeHTTP(rr, req)
 
 	if status := rr.Code; status != http.StatusOK {
@@ -303,7 +303,7 @@ func TestPostCall(t *testing.T) {
 	}
 
 	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(postCallHandler)
+	handler := http.HandlerFunc(PostCallHandler)
 	handler.ServeHTTP(rr, req)
 
 	if status := rr.Code; status != http.StatusOK {
@@ -321,5 +321,6 @@ func TestMain(m *testing.M) {
 	// call flag.Parse() here if TestMain uses flags
 	os.Setenv("VC_URL", "http://zoom")
 	os.Setenv("VC_CALL_ID", "123456")
+	requireCron = true
 	os.Exit(m.Run())
 }

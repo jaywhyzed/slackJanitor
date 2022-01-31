@@ -1,4 +1,4 @@
-package main
+package janitor
 
 import (
 	"fmt"
@@ -11,27 +11,10 @@ import (
 	"github.com/jaywhyzed/slackJanitor/client"
 )
 
-func main() {
-
-	http.HandleFunc("/", indexHandler)
-	http.HandleFunc("/create_channel", createChannelHandler)
-	http.HandleFunc("/post_call", postCallHandler)
-
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-		log.Printf("Defaulting to port %s", port)
-	}
-
-	log.Printf("Listening on port %s", port)
-	if err := http.ListenAndServe(":"+port, nil); err != nil {
-		log.Fatal(err)
-	}
-}
-
 // A time.Location representing California.
 var CaliforniaLocation *time.Location
 var slackClient client.Client
+var requireCron bool = false
 
 // Initialize the client if necessary, and all Execute.
 func Execute(req client.Request, resp interface{}) (string, error) {
@@ -82,8 +65,8 @@ func oldChannelName() string {
 	return timeAsChannelName(time.Now().AddDate(0, 0, -7).In(CaliforniaLocation))
 }
 
-// indexHandler responds to requests with our greeting.
-func indexHandler(w http.ResponseWriter, r *http.Request) {
+// IndexHandler responds to requests with our greeting.
+func IndexHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
 		return
@@ -152,26 +135,28 @@ func getChannelOrDie(name string) *client.Channel {
 	return nil
 }
 
-// createChannelHandler handles the /create_channel URL.
+// CreateChannelHandler handles the /create_channel URL.
 // Create a new channel.
 // Set a topic.
 // Add all non bot users to the new channel.
 // Archive the old channel.
-func createChannelHandler(w http.ResponseWriter, r *http.Request) {
+func CreateChannelHandler(w http.ResponseWriter, r *http.Request) {
 	is_cron := r.Header.Get("X-Appengine-Cron")
 	log.Printf("Called from Appengine-Cron: %v\n", is_cron)
 
-	if is_cron != "true" {
+	if is_cron != "true" && requireCron {
 		log.Printf("Called from non-cron: %+v", *r)
 		log.Printf("Headers: %+v", r.Header)
 		http.Error(w, "Only accepts calls from AppEngine Cron.\n", 400)
 		return
 	}
 
-	if r.URL.Path != "/create_channel" {
-		http.NotFound(w, r)
-		return
-	}
+	// if r.URL.Path != "/create_channel" {
+
+	// 	log.Printf("Unexpected URL path: %q, Query is %q", r.URL.Path, r.URL.Query())
+	// 	http.NotFound(w, r)
+	// 	return
+	// }
 
 	fmt.Fprint(w, "Hello, World!\n")
 
@@ -207,6 +192,12 @@ func createChannelHandler(w http.ResponseWriter, r *http.Request) {
 		&set_topic_resp)
 	if !set_topic_resp.Ok {
 		log.Printf("Failed to set topic.")
+	}
+
+	if _, ok := r.URL.Query()["create_only"]; ok {
+		log.Printf("create_only is specified, skipping user invitation and cleanup")
+		fmt.Fprintf(w, "Skipping user invitation b/c create_only was specified\n")
+		return
 	}
 
 	log.Printf("Getting Users")
@@ -256,25 +247,25 @@ func todayAtSixThirty() time.Time {
 	return time.Date(year, month, day, 18, 30, 0, 0, CaliforniaLocation)
 }
 
-// postCallHandler handles the /post_call URL.
+// PostCallHandler handles the /post_call URL.
 // Create a Call object for the video call.
 // Get the new Channel.
 // Post the Call to the Channel.
-func postCallHandler(w http.ResponseWriter, r *http.Request) {
+func PostCallHandler(w http.ResponseWriter, r *http.Request) {
 	is_cron := r.Header.Get("X-Appengine-Cron")
 	log.Printf("Called from Appengine-Cron: %v\n", is_cron)
 
-	if is_cron != "true" {
+	if is_cron != "true" && requireCron {
 		log.Printf("Called from non-cron: %+v", *r)
 		log.Printf("Headers: %+v", r.Header)
 		http.Error(w, "Only accepts calls from AppEngine Cron.\n", 400)
 		return
 	}
 
-	if r.URL.Path != "/post_call" {
-		http.NotFound(w, r)
-		return
-	}
+	// if r.URL.Path != "/post_call" {
+	// 	http.NotFound(w, r)
+	// 	return
+	// }
 
 	call := client.Call{
 		ExternalUniqueId:  newChannelName(),
